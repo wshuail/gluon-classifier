@@ -86,7 +86,7 @@ class ShuffleNet(nn.HybridBlock):
     def __init__(self, num_classes, groups, channels, multiplier=1.0, **kwargs):
         super(ShuffleNet, self).__init__()
         self.num_classes = num_classes
-        self.channels = [channel*multiplier for channel in channels]
+        channels = [channel*multiplier for channel in channels]
 
         with self.name_scope():
             self.stage1 = nn.HybridSequential()

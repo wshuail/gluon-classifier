@@ -9,11 +9,10 @@ classification network implemented by Gluon. The training script was generally a
 ### Results:
 model_name| papers| ours 
 --|:--:|--:  
-ShuffleNet0.3_g3| 56.8 | 63.1
+ShuffleNet0.3_g3| 67.4 | 63.1
 
-What?!
-maybe something wrong? confirm later.
-
+#### Difference with papers
+for shufflenet, we trained half batches as the papers, and we use train/val2017, but not 2012.
 
 
 
