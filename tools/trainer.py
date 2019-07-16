@@ -13,10 +13,8 @@ from mxnet import gluon, nd
 from mxnet import autograd
 from mxnet.gluon import nn
 from mxnet.gluon.data.vision import transforms
-from nvidia.dali.plugin.mxnet import DALIClassificationIterator
 
-sys.path.insert(0, os.path.expanduser('~/gluon_classifier'))
-from lib.data.loader import HybridTrainPipe, HybridValPipe
+sys.path.insert(0, '../')
 from lib.modelzoo.modelzoo import get_model
 from lib.utils.lr_scheduler import LRSequential, LRScheduler
 from lib.utils.logger import build_logger
@@ -114,7 +112,7 @@ def parse_args():
     return opt
 
 
-def get_lr_scheduler(opt):
+def get_lr_scheduler(batch_size, opt):
     lr_decay = opt.lr_decay
     lr_decay_period = opt.lr_decay_period
     lr_decay_epoch = [int(i) for i in opt.lr_decay_epoch.split(',')]
@@ -137,14 +135,8 @@ def get_lr_scheduler(opt):
 def build_net(ctx, opt):
     model_name = opt.model
 
-    # if model_name == 'shufflenet':
-    # net = get_shufflenet0_5(num_classes=1000)
     net = get_model(opt.model, num_classes=1000)
     logging.info('network {} built.'.format(opt.model))
-    # else:
-    # kwargs = {'ctx': ctx, 'classes': 1000}
-    # net = get_model(model_name, **kwargs)
-    # net.cast(opt.dtype)
 
     net.initialize(mx.init.MSRAPrelu(), ctx=ctx)
     logging.info('net built.')
@@ -152,6 +144,8 @@ def build_net(ctx, opt):
     return net
 
 def get_dali_dataloder(batch_size, ctx, opt):
+    from nvidia.dali.plugin.mxnet import DALIClassificationIterator
+    from lib.data.loader import HybridTrainPipe, HybridValPipe
     rec_train = os.path.expanduser(opt.rec_train)
     rec_train_idx = os.path.expanduser(opt.rec_train_idx)
     rec_val = os.path.expanduser(opt.rec_val)
@@ -164,14 +158,14 @@ def get_dali_dataloder(batch_size, ctx, opt):
                                   batch_size=batch_size,
                                   input_size=input_size,
                                   num_gpus=num_devices,
-                                  num_threads=16,
+                                  num_threads=32,
                                   device_id=i) for i in range(num_devices)]
     valpipes = [HybridValPipe(rec_path=rec_val,
                               index_path=rec_val_idx,
                               batch_size=batch_size,
                               input_size=input_size,
                               num_gpus=num_devices,
-                              num_threads=16,
+                              num_threads=32,
                               device_id=i) for i in range(num_devices)]
     
     trainpipes[0].build()
@@ -179,6 +173,8 @@ def get_dali_dataloder(batch_size, ctx, opt):
     
     train_loader = DALIClassificationIterator(trainpipes, trainpipes[0].epoch_size("Reader"))
     val_loader = DALIClassificationIterator(valpipes, valpipes[0].epoch_size("Reader"))
+
+    logging.info('dali dataloder was loaded.')
     
     return train_loader, val_loader
 
@@ -198,8 +194,8 @@ def get_data_rec(batch_size, opt):
     std_rgb = [58.393, 57.12, 57.375]
 
     train_data = mx.io.ImageRecordIter(
-        path_imgrec         = rec_train,
-        path_imgidx         = rec_train_idx,
+        path_imgrec         = opt.rec_train,
+        path_imgidx         = opt.rec_train_idx,
         preprocess_threads  = num_workers,
         shuffle             = True,
         batch_size          = batch_size,
@@ -224,8 +220,8 @@ def get_data_rec(batch_size, opt):
     )
     
     val_data = mx.io.ImageRecordIter(
-        path_imgrec         = rec_val,
-        path_imgidx         = rec_val_idx,
+        path_imgrec         = opt.rec_val,
+        path_imgidx         = opt.rec_val_idx,
         preprocess_threads  = num_workers,
         shuffle             = False,
         batch_size          = batch_size,
@@ -263,7 +259,7 @@ def validation(val_data, ctx, opt):
 
 def train(net, train_data, val_data, ctx, opt):
 
-    lr_scheduler = get_lr_scheduler(opt)
+    lr_scheduler = get_lr_scheduler(batch_size, opt)
     optimizer_params = {'wd': opt.wd, 'momentum': opt.momentum, 'lr_scheduler': lr_scheduler}
     
     trainer = gluon.Trainer(net.collect_params(), opt.optimizer, optimizer_params)
@@ -324,7 +320,7 @@ def train(net, train_data, val_data, ctx, opt):
             prefix = '{}_{}_{}'.format(opt.model, 'imagenet', datestamp) 
             save_prefix = os.path.expanduser(os.path.join(opt.save_dir, prefix))
             net.export(save_prefix, epoch+1)
-            param_file = '{}-{}.params'.format(opt.save_prefix, str(epoch+1).zfill(4))
+            param_file = '{}-{}.params'.format(save_prefix, str(epoch+1).zfill(4))
             logging.info('model parameters were saved at {}'.format(param_file))
 
 

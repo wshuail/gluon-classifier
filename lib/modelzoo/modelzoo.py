@@ -1,7 +1,9 @@
 from .shufflenet import shufflenet0_5_g3
+from .shufflenetv2 import shufflenetv2_0_5
 
 _models = {
-    'shufflenet0.5_g3': shufflenet0_5_g3
+    'shufflenet0.5_g3': shufflenet0_5_g3,
+    'shufflenetv2_0.5': shufflenetv2_0_5
 }
 
 
